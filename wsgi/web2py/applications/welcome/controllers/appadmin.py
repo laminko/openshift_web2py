@@ -16,6 +16,8 @@ try:
 except ImportError:
     pgv = None
 
+is_gae = request.env.web2py_runtime_gae or False
+
 # ## critical --- make a copy of the environment
 
 global_env = copy.copy(globals())
@@ -30,7 +32,7 @@ try:
 except:
     hosts = (http_host, )
 
-if request.env.http_x_forwarded_for or request.is_https:
+if request.is_https:
     session.secure()
 elif (remote_addr not in hosts) and (remote_addr != "127.0.0.1") and \
     (request.function != 'manage'):
@@ -50,11 +52,11 @@ if request.function == 'manage':
     auth.requires_membership(manager_role)(lambda: None)()
     menu = False
 elif (request.application == 'admin' and not session.authorized) or \
-        (request.application != 'admin' and not gluon.fileutils.check_credentials(request)):    
+        (request.application != 'admin' and not gluon.fileutils.check_credentials(request)):
     redirect(URL('admin', 'default', 'index',
                  vars=dict(send=URL(args=request.args, vars=request.vars))))
 else:
-    response.subtitle = 'Database Administration (appadmin)'
+    response.subtitle = T('Database Administration (appadmin)')
     menu = True
 
 ignore_rw = True
@@ -87,9 +89,7 @@ def get_databases(request):
             dbs[key] = value
     return dbs
 
-
 databases = get_databases(None)
-
 
 def eval_in_global_env(text):
     exec ('_ret=%s' % text, {}, global_env)
@@ -102,7 +102,6 @@ def get_database(request):
     else:
         session.flash = T('invalid request')
         redirect(URL('index'))
-
 
 def get_table(request):
     db = get_database(request)
@@ -186,6 +185,10 @@ def select():
     import re
     db = get_database(request)
     dbname = request.args[0]
+    try:
+        is_imap = db._uri.startswith("imap://")
+    except (KeyError, AttributeError, TypeError):
+        is_imap = False
     regex = re.compile('(?P<table>\w+)\.(?P<field>\w+)=(?P<value>\d+)')
     if len(request.args) > 1 and hasattr(db[request.args[1]], '_primarykey'):
         regex = re.compile('(?P<table>\w+)\.(?P<field>\w+)=(?P<value>.+)')
@@ -203,7 +206,15 @@ def select():
     else:
         start = 0
     nrows = 0
-    stop = start + 100
+
+    step = 100
+    fields = []
+
+    if is_imap:
+        step = 3
+ 
+    stop = start + step
+
     table = None
     rows = []
     orderby = request.vars.orderby
@@ -235,21 +246,27 @@ def select():
         if match:
             table = match.group('table')
         try:
-            nrows = db(query).count()
+            nrows = db(query, ignore_common_filters=True).count()
             if form.vars.update_check and form.vars.update_fields:
-                db(query).update(**eval_in_global_env('dict(%s)'
-                                                      % form.vars.update_fields))
+                db(query, ignore_common_filters=True).update(
+                    **eval_in_global_env('dict(%s)' % form.vars.update_fields))
                 response.flash = T('%s %%{row} updated', nrows)
             elif form.vars.delete_check:
-                db(query).delete()
+                db(query, ignore_common_filters=True).delete()
                 response.flash = T('%s %%{row} deleted', nrows)
-            nrows = db(query).count()
+            nrows = db(query, ignore_common_filters=True).count()
+
+            if is_imap:
+                fields = [db[table][name] for name in
+                    ("id", "uid", "created", "to",
+                     "sender", "subject")]
             if orderby:
-                rows = db(query, ignore_common_filters=True).select(limitby=(
-                    start, stop), orderby=eval_in_global_env(orderby))
+                rows = db(query, ignore_common_filters=True).select(
+                              *fields, limitby=(start, stop),
+                              orderby=eval_in_global_env(orderby))
             else:
                 rows = db(query, ignore_common_filters=True).select(
-                    limitby=(start, stop))
+                    *fields, limitby=(start, stop))
         except Exception, e:
             import traceback
             tb = traceback.format_exc()
@@ -278,11 +295,12 @@ def select():
         table=table,
         start=start,
         stop=stop,
+        step=step,
         nrows=nrows,
         rows=rows,
         query=request.vars.query,
         formcsv=formcsv,
-        tb=tb,
+        tb=tb
     )
 
 
@@ -340,36 +358,43 @@ def state():
 
 
 def ccache():
-    cache.ram.initialize()
-    cache.disk.initialize()
+    if is_gae:
+        form = FORM(
+            P(TAG.BUTTON(T("Clear CACHE?"), _type="submit", _name="yes", _value="yes")))
+    else:
+        cache.ram.initialize()
+        cache.disk.initialize()
 
-    form = FORM(
-        P(TAG.BUTTON(
-            T("Clear CACHE?"), _type="submit", _name="yes", _value="yes")),
-        P(TAG.BUTTON(
-            T("Clear RAM"), _type="submit", _name="ram", _value="ram")),
-        P(TAG.BUTTON(
-            T("Clear DISK"), _type="submit", _name="disk", _value="disk")),
-    )
+        form = FORM(
+            P(TAG.BUTTON(
+                T("Clear CACHE?"), _type="submit", _name="yes", _value="yes")),
+            P(TAG.BUTTON(
+                T("Clear RAM"), _type="submit", _name="ram", _value="ram")),
+            P(TAG.BUTTON(
+                T("Clear DISK"), _type="submit", _name="disk", _value="disk")),
+        )
 
     if form.accepts(request.vars, session):
-        clear_ram = False
-        clear_disk = False
         session.flash = ""
-        if request.vars.yes:
-            clear_ram = clear_disk = True
-        if request.vars.ram:
-            clear_ram = True
-        if request.vars.disk:
-            clear_disk = True
-
-        if clear_ram:
-            cache.ram.clear()
-            session.flash += T("Ram Cleared")
-        if clear_disk:
-            cache.disk.clear()
-            session.flash += T("Disk Cleared")
-
+        if is_gae:
+            if request.vars.yes:
+                cache.ram.clear()
+                session.flash += T("Cache Cleared")
+        else:
+            clear_ram = False
+            clear_disk = False
+            if request.vars.yes:
+                clear_ram = clear_disk = True
+            if request.vars.ram:
+                clear_ram = True
+            if request.vars.disk:
+                clear_disk = True
+            if clear_ram:
+                cache.ram.clear()
+                session.flash += T("Ram Cleared")
+            if clear_disk:
+                cache.disk.clear()
+                session.flash += T("Disk Cleared")
         redirect(URL(r=request))
 
     try:
@@ -395,6 +420,7 @@ def ccache():
         'oldest': time.time(),
         'keys': []
     }
+
     disk = copy.copy(ram)
     total = copy.copy(ram)
     disk['keys'] = []
@@ -409,31 +435,35 @@ def ccache():
 
         return (hours, minutes, seconds)
 
-    for key, value in cache.ram.storage.iteritems():
-        if isinstance(value, dict):
-            ram['hits'] = value['hit_total'] - value['misses']
-            ram['misses'] = value['misses']
-            try:
-                ram['ratio'] = ram['hits'] * 100 / value['hit_total']
-            except (KeyError, ZeroDivisionError):
-                ram['ratio'] = 0
-        else:
-            if hp:
-                ram['bytes'] += hp.iso(value[1]).size
-                ram['objects'] += hp.iso(value[1]).count
-            ram['entries'] += 1
-            if value[0] < ram['oldest']:
-                ram['oldest'] = value[0]
-            ram['keys'].append((key, GetInHMS(time.time() - value[0])))
-    folder = os.path.join(request.folder,'cache')
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    locker = open(os.path.join(folder, 'cache.lock'), 'a')
-    portalocker.lock(locker, portalocker.LOCK_EX)
-    disk_storage = shelve.open(
-        os.path.join(folder, 'cache.shelve'))
-    try:
-        for key, value in disk_storage.items():
+    if is_gae:
+        gae_stats = cache.ram.client.get_stats()
+        try:
+            gae_stats['ratio'] = ((gae_stats['hits'] * 100) /
+                (gae_stats['hits'] + gae_stats['misses']))
+        except ZeroDivisionError:
+            gae_stats['ratio'] = T("?")
+        gae_stats['oldest'] = GetInHMS(time.time() - gae_stats['oldest_item_age'])
+        total.update(gae_stats)
+    else:
+        for key, value in cache.ram.storage.iteritems():
+            if isinstance(value, dict):
+                ram['hits'] = value['hit_total'] - value['misses']
+                ram['misses'] = value['misses']
+                try:
+                    ram['ratio'] = ram['hits'] * 100 / value['hit_total']
+                except (KeyError, ZeroDivisionError):
+                    ram['ratio'] = 0
+            else:
+                if hp:
+                    ram['bytes'] += hp.iso(value[1]).size
+                    ram['objects'] += hp.iso(value[1]).count
+                ram['entries'] += 1
+                if value[0] < ram['oldest']:
+                    ram['oldest'] = value[0]
+                ram['keys'].append((key, GetInHMS(time.time() - value[0])))
+
+        for key in cache.disk.storage:
+            value = cache.disk.storage[key]
             if isinstance(value, dict):
                 disk['hits'] = value['hit_total'] - value['misses']
                 disk['misses'] = value['misses']
@@ -450,31 +480,26 @@ def ccache():
                     disk['oldest'] = value[0]
                 disk['keys'].append((key, GetInHMS(time.time() - value[0])))
 
-    finally:
-        portalocker.unlock(locker)
-        locker.close()
-        disk_storage.close()
-
-    total['entries'] = ram['entries'] + disk['entries']
-    total['bytes'] = ram['bytes'] + disk['bytes']
-    total['objects'] = ram['objects'] + disk['objects']
-    total['hits'] = ram['hits'] + disk['hits']
-    total['misses'] = ram['misses'] + disk['misses']
-    total['keys'] = ram['keys'] + disk['keys']
-    try:
-        total['ratio'] = total['hits'] * 100 / (total['hits'] +
+        total['entries'] = ram['entries'] + disk['entries']
+        total['bytes'] = ram['bytes'] + disk['bytes']
+        total['objects'] = ram['objects'] + disk['objects']
+        total['hits'] = ram['hits'] + disk['hits']
+        total['misses'] = ram['misses'] + disk['misses']
+        total['keys'] = ram['keys'] + disk['keys']
+        try:
+            total['ratio'] = total['hits'] * 100 / (total['hits'] +
                                                 total['misses'])
-    except (KeyError, ZeroDivisionError):
-        total['ratio'] = 0
+        except (KeyError, ZeroDivisionError):
+            total['ratio'] = 0
 
-    if disk['oldest'] < ram['oldest']:
-        total['oldest'] = disk['oldest']
-    else:
-        total['oldest'] = ram['oldest']
+        if disk['oldest'] < ram['oldest']:
+            total['oldest'] = disk['oldest']
+        else:
+            total['oldest'] = ram['oldest']
 
-    ram['oldest'] = GetInHMS(time.time() - ram['oldest'])
-    disk['oldest'] = GetInHMS(time.time() - disk['oldest'])
-    total['oldest'] = GetInHMS(time.time() - total['oldest'])
+        ram['oldest'] = GetInHMS(time.time() - ram['oldest'])
+        disk['oldest'] = GetInHMS(time.time() - disk['oldest'])
+        total['oldest'] = GetInHMS(time.time() - total['oldest'])
 
     def key_table(keys):
         return TABLE(
@@ -483,9 +508,10 @@ def ccache():
             **dict(_class='cache-keys',
                    _style="border-collapse: separate; border-spacing: .5em;"))
 
-    ram['keys'] = key_table(ram['keys'])
-    disk['keys'] = key_table(disk['keys'])
-    total['keys'] = key_table(total['keys'])
+    if not is_gae:
+        ram['keys'] = key_table(ram['keys'])
+        disk['keys'] = key_table(disk['keys'])
+        total['keys'] = key_table(total['keys'])
 
     return dict(form=form, total=total,
                 ram=ram, disk=disk, object_stats=hp != False)
@@ -540,30 +566,30 @@ def table_template(table):
 
 def bg_graph_model():
     graph = pgv.AGraph(layout='dot',  directed=True,  strict=False,  rankdir='LR')
-    
-    subgraphs = dict()    
+
+    subgraphs = dict()
     for tablename in db.tables:
         if hasattr(db[tablename],'_meta_graphmodel'):
             meta_graphmodel = db[tablename]._meta_graphmodel
         else:
-            meta_graphmodel = dict(group='Undefined', color='#ECECEC')
-        
-        group = meta_graphmodel['group'].replace(' ', '') 
+            meta_graphmodel = dict(group=request.application, color='#ECECEC')
+
+        group = meta_graphmodel['group'].replace(' ', '')
         if not subgraphs.has_key(group):
             subgraphs[group] = dict(meta=meta_graphmodel, tables=[])
             subgraphs[group]['tables'].append(tablename)
         else:
-            subgraphs[group]['tables'].append(tablename)        
-      
+            subgraphs[group]['tables'].append(tablename)
+
         graph.add_node(tablename, name=tablename, shape='plaintext',
                        label=table_template(tablename))
-    
-    for n, key in enumerate(subgraphs.iterkeys()):        
+
+    for n, key in enumerate(subgraphs.iterkeys()):
         graph.subgraph(nbunch=subgraphs[key]['tables'],
                     name='cluster%d' % n,
                     style='filled',
                     color=subgraphs[key]['meta']['color'],
-                    label=subgraphs[key]['meta']['group'])   
+                    label=subgraphs[key]['meta']['group'])
 
     for tablename in db.tables:
         for field in db[tablename]:
@@ -577,17 +603,17 @@ def bg_graph_model():
                 graph.add_edge(n1, n2, color="#4C4C4C", label='')
 
     graph.layout()
-    #return graph.draw(format='png', prog='dot')
     if not request.args:
+        response.headers['Content-Type'] = 'image/png'
         return graph.draw(format='png', prog='dot')
-    else:       
+    else:
         response.headers['Content-Disposition']='attachment;filename=graph.%s'%request.args(0)
-        if request.args(0) == 'dot':        
+        if request.args(0) == 'dot':
             return graph.string()
         else:
             return graph.draw(format=request.args(0), prog='dot')
 
-def graph_model():    
+def graph_model():
     return dict(databases=databases, pgv=pgv)
 
 def manage():
@@ -631,3 +657,46 @@ def manage():
     kwargs.update(**smartgrid_args.get(table._tablename, {}))
     grid = SQLFORM.smartgrid(table, args=request.args[:2], formname=formname, **kwargs)
     return grid
+
+def hooks():
+    import functools
+    import inspect
+    list_op=['_%s_%s' %(h,m) for h in ['before', 'after'] for m in ['insert','update','delete']]
+    tables=[]
+    with_build_it=False
+    for db_str in sorted(databases):
+        db = databases[db_str]
+        for t in db.tables:
+            method_hooks=[]
+            for op in list_op:
+                functions = []
+                for f in getattr(db[t], op):
+                    if hasattr(f, '__call__'):
+                        try:
+                            if isinstance(f, (functools.partial)):
+                                f = f.func
+                            filename = inspect.getsourcefile(f)
+                            details = {'funcname':f.__name__,
+                                       'filename':filename[len(request.folder):] if request.folder in filename else None,
+                                       'lineno': inspect.getsourcelines(f)[1]}
+                            if details['filename']: # Built in functions as delete_uploaded_files are not editable
+                                details['url'] = URL(a='admin',c='default',f='edit', args=[request['application'], details['filename']],vars={'lineno':details['lineno']})
+                            if details['filename'] or with_build_it:
+                                functions.append(details)
+                        # compiled app and windows build don't support code inspection
+                        except:
+                            pass
+                if len(functions):
+                    method_hooks.append({'name':op, 'functions':functions})
+            if len(method_hooks):
+                tables.append({'name':"%s.%s" % (db_str,t), 'slug': IS_SLUG()("%s.%s" % (db_str,t))[0], 'method_hooks':method_hooks})
+    # Render
+    ul_main = UL(_class='nav nav-list')
+    for t in tables:
+        ul_main.append(A(t['name'], _onclick="collapse('a_%s')" % t['slug']))
+        ul_t = UL(_class='nav nav-list', _id="a_%s" % t['slug'], _style='display:none')
+        for op in t['method_hooks']:
+            ul_t.append(LI (op['name']))
+            ul_t.append(UL([LI(A(f['funcname'], _class="editor_filelink", _href=f['url']if 'url' in f else None, **{'_data-lineno':f['lineno']-1})) for f in op['functions']]))
+        ul_main.append(ul_t)
+    return ul_main

@@ -1,10 +1,13 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
-This file is part of the web2py Web Framework
-Copyrighted by Massimo Di Pierro <mdipierro@cs.depaul.edu>
-License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
+| This file is part of the web2py Web Framework
+| Copyrighted by Massimo Di Pierro <mdipierro@cs.depaul.edu>
+| License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
 
 Utility functions for the Admin application
-===========================================
+-------------------------------------------
 """
 import os
 import sys
@@ -12,28 +15,25 @@ import traceback
 import zipfile
 import urllib
 from shutil import rmtree
-from utils import web2py_uuid
-from fileutils import w2p_pack, w2p_unpack, w2p_pack_plugin, w2p_unpack_plugin
-from fileutils import up, fix_newlines, abspath, recursive_unlink
-from fileutils import read_file, write_file, parse_version
-from restricted import RestrictedError
-from settings import global_settings
-from http import HTTP
+from gluon.utils import web2py_uuid
+from gluon.fileutils import w2p_pack, w2p_unpack, w2p_pack_plugin, w2p_unpack_plugin
+from gluon.fileutils import up, fix_newlines, abspath, recursive_unlink
+from gluon.fileutils import read_file, write_file, parse_version
+from gluon.restricted import RestrictedError
+from gluon.settings import global_settings
+from gluon.cache import CacheOnDisk
+
 
 if not global_settings.web2py_runtime_gae:
     import site
 
 
 def apath(path='', r=None):
-    """
-    Builds a path inside an application folder
+    """Builds a path inside an application folder
 
-    Parameters
-    ----------
-    path:
-        path within the application folder
-    r:
-        the global request object
+    Args:
+        path(str): path within the application folder
+        r: the global request object
 
     """
 
@@ -44,20 +44,14 @@ def apath(path='', r=None):
 
 
 def app_pack(app, request, raise_ex=False, filenames=None):
-    """
-    Builds a w2p package for the application
+    """Builds a w2p package for the application
 
-    Parameters
-    ----------
-    app:
-        application name
-    request:
-        the global request object
-
-    Returns
-    -------
-    filename:
+    Args:
+        app(str): application name
+        request: the global request object
+    Returns:
         filename of the w2p file or None on error
+
     """
     try:
         if filenames is None: app_cleanup(app, request)
@@ -71,20 +65,15 @@ def app_pack(app, request, raise_ex=False, filenames=None):
 
 
 def app_pack_compiled(app, request, raise_ex=False):
-    """
-    Builds a w2p bytecode-compiled package for the application
+    """Builds a w2p bytecode-compiled package for the application
 
-    Parameters
-    ----------
-    app:
-        application name
-    request:
-        the global request object
+    Args:
+        app(str): application name
+        request: the global request object
 
-    Returns
-    -------
-    filename:
+    Returns:
         filename of the w2p file or None on error
+
     """
 
     try:
@@ -98,15 +87,15 @@ def app_pack_compiled(app, request, raise_ex=False):
 
 
 def app_cleanup(app, request):
-    """
-    Removes session, cache and error files
+    """Removes session, cache and error files
 
-    Parameters
-    ----------
-    app:
-        application name
-    request:
-        the global request object
+    Args:
+        app(str): application name
+        request: the global request object
+
+    Returns:
+        True if everything went ok, False otherwise
+
     """
     r = True
 
@@ -125,30 +114,32 @@ def app_cleanup(app, request):
         for f in os.listdir(path):
             try:
                 if f[:1] != '.': recursive_unlink(os.path.join(path, f))
-            except IOError:
+            except (OSError, IOError):
                 r = False
 
     # Remove cache files
     path = apath('%s/cache/' % app, request)
+    CacheOnDisk(folder=path).clear()
+    
     if os.path.exists(path):
         for f in os.listdir(path):
             try:
-                if f[:1] != '.': os.unlink(os.path.join(path, f))
-            except IOError:
+                if f[:1] != '.': recursive_unlink(os.path.join(path, f))
+            except (OSError, IOError):
                 r = False
     return r
 
 
 def app_compile(app, request):
-    """
-    Compiles the application
+    """Compiles the application
 
-    Parameters
-    ----------
-    app:
-        application name
-    request:
-        the global request object
+    Args:
+        app(str): application name
+        request: the global request object
+
+    Returns:
+        None if everything went ok, traceback text if errors are found
+
     """
     from compileapp import compile_application, remove_compiled_application
     folder = apath(app, request)
@@ -162,15 +153,11 @@ def app_compile(app, request):
 
 
 def app_create(app, request, force=False, key=None, info=False):
-    """
-    Create a copy of welcome.w2p (scaffolding) app
+    """Create a copy of welcome.w2p (scaffolding) app
 
-    Parameters
-    ----------
-    app:
-        application name
-    request:
-        the global request object
+    Args:
+        app(str): application name
+        request: the global request object
 
     """
     path = apath(app, request)
@@ -215,28 +202,23 @@ def app_create(app, request, force=False, key=None, info=False):
 
 
 def app_install(app, fobj, request, filename, overwrite=None):
-    """
-    Installs an application:
+    """Installs an application:
 
     - Identifies file type by filename
     - Writes `fobj` contents to the `../deposit/` folder
     - Calls `w2p_unpack()` to do the job.
 
-    Parameters
-    ----------
-    app:
-        new application name
-    fobj:
-        file object containing the application to be installed
-    request:
-        the global request object
-    filename:
-        original filename of the `fobj`, required to determine extension
+    Args:
+        app(str): new application name
+        fobj(obj): file object containing the application to be installed
+        request: the global request object
+        filename(str): original filename of the `fobj`,
+            required to determine extension
+        overwrite(bool): force overwrite of existing application
 
-    Returns
-    -------
-    upname:
+    Returns:
         name of the file where app is temporarily stored or `None` on failure
+
     """
     did_mkdir = False
     if filename[-4:] == '.w2p':
@@ -265,19 +247,15 @@ def app_install(app, fobj, request, filename, overwrite=None):
 
 
 def app_uninstall(app, request):
-    """
-    Uninstalls the application.
+    """Uninstalls the application.
 
-    Parameters
-    ----------
-    app:
-        application name
-    request:
-        the global request object
+    Args:
+        app(str): application name
+        request: the global request object
 
-    Returns
-    -------
-    `True` on success, `False` on failure
+    Returns:
+        `True` on success, `False` on failure
+
     """
     try:
         # Hey App, this is your end...
@@ -289,22 +267,16 @@ def app_uninstall(app, request):
 
 
 def plugin_pack(app, plugin_name, request):
-    """
-    Builds a w2p package for the application
+    """Builds a w2p package for the plugin
 
-    Parameters
-    ----------
-    app:
-        application name
-    plugin_name:
-        the name of the plugin without plugin_ prefix
-    request:
-        the current request app
+    Args:
+        app(str): application name
+        plugin_name(str): the name of the plugin without `plugin_` prefix
+        request: the current request app
 
-    Returns
-    -------
-    filename:
-        filename of the w2p file or None on error
+    Returns:
+        filename of the w2p file or False on error
+
     """
     try:
         filename = apath(
@@ -316,30 +288,24 @@ def plugin_pack(app, plugin_name, request):
 
 
 def plugin_install(app, fobj, request, filename):
-    """
-    Installs an application:
+    """Installs a plugin:
 
     - Identifies file type by filename
     - Writes `fobj` contents to the `../deposit/` folder
-    - Calls `w2p_unpack()` to do the job.
+    - Calls `w2p_unpack_plugin()` to do the job.
 
-    Parameters
-    ----------
-    app:
-        new application name
-    fobj:
-        file object containing the application to be installed
-    request:
-        the global request object
-    filename:
-        original filename of the `fobj`, required to determine extension
+    Args:
+        app(str): new application name
+        fobj: file object containing the application to be installed
+        request: the global request object
+        filename: original filename of the `fobj`,
+            required to determine extension
 
-    Returns
-    -------
-    upname:
-        name of the file where app is temporarily stored or `None` on failure
+    Returns:
+        name of the file where plugin is temporarily stored
+        or `False` on failure
+
     """
-
     upname = apath('../deposit/%s' % filename, request)
 
     try:
@@ -353,28 +319,25 @@ def plugin_install(app, fobj, request, filename):
         return False
 
 
-def check_new_version(myversion, version_URL):
-    """
-    Compares current web2py's version with the latest stable web2py version.
+def check_new_version(myversion, version_url):
+    """Compares current web2py's version with the latest stable web2py version.
 
-    Parameters
-    ----------
-    myversion:
-        the current version as stored in file `web2py/VERSION`
-    version_URL:
-        the URL that contains the version of the latest stable release
+    Args:
+        myversion: the current version as stored in file `web2py/VERSION`
+        version_URL: the URL that contains the version
+                     of the latest stable release
 
-    Returns
-    -------
-    state:
-        `True` if upgrade available, `False` if current version if up-to-date,
-        -1 on error
-    version:
-        the most up-to-version available
+    Returns:
+        tuple: state, version
+
+        - state : `True` if upgrade available, `False` if current
+          version is up-to-date, -1 on error
+        - version : the most up-to-version available
+
     """
     try:
         from urllib import urlopen
-        version = urlopen(version_URL).read()
+        version = urlopen(version_url).read()
         pversion = parse_version(version)
         pmyversion = parse_version(myversion)
     except IOError:
@@ -389,16 +352,20 @@ def check_new_version(myversion, version_URL):
 
 
 def unzip(filename, dir, subfolder=''):
-    """
-    Unzips filename into dir (.zip only, no .gz etc)
-    if subfolder!='' it unzip only files in subfolder
+    """Unzips filename into dir (.zip only, no .gz etc)
+
+    Args:
+        filename(str): archive
+        dir(str): destination
+        subfolder(str): if != '' unzips only files in subfolder
+
     """
     filename = abspath(filename)
     if not zipfile.is_zipfile(filename):
         raise RuntimeError('Not a valid zipfile')
     zf = zipfile.ZipFile(filename)
     if not subfolder.endswith('/'):
-        subfolder = subfolder + '/'
+        subfolder += '/'
     n = len(subfolder)
     for name in sorted(zf.namelist()):
         if not name.startswith(subfolder):
@@ -413,30 +380,31 @@ def unzip(filename, dir, subfolder=''):
 
 
 def upgrade(request, url='http://web2py.com'):
-    """
-    Upgrades web2py (src, osx, win) is a new version is posted.
+    """Upgrades web2py (src, osx, win) if a new version is posted.
     It detects whether src, osx or win is running and downloads the right one
 
-    Parameters
-    ----------
-    request:
-        the current request object, required to determine version and path
-    url:
-        the incomplete url where to locate the latest web2py
-        actual url is url+'/examples/static/web2py_(src|osx|win).zip'
+    Args:
+        request: the current request object
+            (required to determine version and path)
+        url: the incomplete url where to locate the latest web2py
+             (actual url is url+'/examples/static/web2py_(src|osx|win).zip')
 
     Returns
-    -------
-        True on success, False on failure (network problem or old version)
+        tuple: completed, traceback
+
+        - completed: True on success, False on failure
+          (network problem or old version)
+        - traceback: None on success, raised exception details on failure
+
     """
     web2py_version = request.env.web2py_version
     gluon_parent = request.env.gluon_parent
     if not gluon_parent.endswith('/'):
-        gluon_parent = gluon_parent + '/'
+        gluon_parent += '/'
     (check, version) = check_new_version(web2py_version,
                                          url + '/examples/default/version')
     if not check:
-        return (False, 'Already latest version')
+        return False, 'Already latest version'
     if os.path.exists(os.path.join(gluon_parent, 'web2py.exe')):
         version_type = 'win'
         destination = gluon_parent
@@ -452,7 +420,6 @@ def upgrade(request, url='http://web2py.com'):
 
     full_url = url + '/examples/static/web2py_%s.zip' % version_type
     filename = abspath('web2py_%s_downloaded.zip' % version_type)
-    file = None
     try:
         write_file(filename, urllib.urlopen(full_url).read(), 'wb')
     except Exception, e:

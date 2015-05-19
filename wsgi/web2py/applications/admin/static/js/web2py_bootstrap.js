@@ -20,16 +20,14 @@ jQuery(function(){
   function hoverMenu(){
     jQuery('ul.nav a.dropdown-toggle').parent().hover(function(){
         adjust_height_of_collapsed_nav();
-        mi = jQuery(this).addClass('open');
+        var mi = jQuery(this).addClass('open');
         mi.children('.dropdown-menu').stop(true, true).delay(200).fadeIn(400);
     }, function(){
-        mi = jQuery(this);
+        var mi = jQuery(this);
         mi.children('.dropdown-menu').stop(true, true).delay(200).fadeOut(function(){mi.removeClass('open')});
     });
   }
   hoverMenu(); // first page load
   jQuery(window).resize(hoverMenu); // on resize event
   jQuery('ul.nav li.dropdown a').click(function(){window.location=jQuery(this).attr('href');});
-  // make all buttons bootstrap buttons
-  jQuery('button, form input[type="submit"], form input[type="button"]').addClass('btn');
 });

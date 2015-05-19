@@ -36,14 +36,9 @@ echo 'server {
         listen          80;
         server_name     $hostname;
         #to enable correct use of response.static_version
-        #location ~* /(\w+)/static(?:/_[\d]+\.[\d]+\.[\d]+)?/(.*)$ {
-        #    alias /srv/www/web2py/applications/$1/static/$2;
-        #    expires max;
-        #}
-        location ~* /(\w+)/static/ {
-            root /srv/www/web2py/applications/;
-            #remove next comment on production
-            #expires max;
+        location ~* /(\w+)/static(?:/_[\d]+\.[\d]+\.[\d]+)?/(.*)$ {
+            alias /srv/www/web2py/applications/$1/static/$2;
+            expires max;
         }
         location / {
             #uwsgi_pass      127.0.0.1:9001;
@@ -64,6 +59,10 @@ server {
         ssl_ciphers ECDHE-RSA-AES256-SHA:DHE-RSA-AES256-SHA:DHE-DSS-AES256-SHA:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA;
         ssl_protocols SSLv3 TLSv1;
         keepalive_timeout    70;
+        location ~* /(\w+)/static(?:/_[\d]+\.[\d]+\.[\d]+)?/(.*)$ {
+            alias /srv/www/web2py/applications/$1/static/$2;
+            expires max;
+        }
         location / {
             #uwsgi_pass      127.0.0.1:9001;
             uwsgi_pass      unix:///tmp/web2py.socket;
@@ -71,7 +70,7 @@ server {
             uwsgi_param     UWSGI_SCHEME $scheme;
             uwsgi_param     SERVER_SOFTWARE    nginx/$nginx_version;
         }
- 
+
 }' >/etc/nginx/vhosts.d/web2py.conf
 
 
@@ -102,8 +101,7 @@ cd /srv/www/
 wget http://web2py.com/examples/static/web2py_src.zip
 unzip web2py_src.zip
 rm web2py_src.zip
-# Download latest version of sessions2trash.py
-wget http://web2py.googlecode.com/hg/scripts/sessions2trash.py -O /srv/www/web2py/scripts/sessions2trash.py
+mv web2py/handlers/wsgihandler.py web2py/wsgihandler.py
 chown -R nginx:www web2py
 cd /srv/www/web2py
 sudo -u nginx python -c "from gluon.main import save_password; save_password('$PW',443)"
@@ -137,7 +135,7 @@ echo '#!/bin/sh
 
 # Check for missing binaries (stale symlinks should not happen)
 UWSGI_BIN=/usr/bin/uwsgi
-test -x $UWSGI_BIN || { echo "$UWSGI_BIN not installed"; 
+test -x $UWSGI_BIN || { echo "$UWSGI_BIN not installed";
         if [ "$1" = "stop" ]; then exit 0;
         else exit 5; fi; }
 
@@ -150,13 +148,13 @@ UWSGI_OPTIONS="$UWSGI_OPTIONS --autoload"
 
 if [ "$UWSGI_EMPEROR_MODE" = "true" ] ; then
     UWSGI_OPTIONS="$UWSGI_OPTIONS --emperor $UWSGI_VASSALS"
-fi                                                                                                                                                                                              
-                                                                                                                                                                                                
-. /etc/rc.status                                                                                                                                                                                
-                                                                                                                                                                                                
-rc_reset                                                                                                                                                                                        
-                                                                                                                                                                                                
-case "$1" in                                                                                                                                                                                    
+fi
+
+. /etc/rc.status
+
+rc_reset
+
+case "$1" in
     start)
         echo -n "Starting uWSGI "
         /sbin/startproc $UWSGI_BIN $UWSGI_OPTIONS
@@ -219,7 +217,7 @@ chmod +x /etc/init.d/uwsgi
 
 chkconfig --add uwsgi
 chkconfig --add nginx
- 
+
 ## you can reload uwsgi with
 #/etc/init.d/uwsgi restart
 ## to reload web2py only (without restarting uwsgi)

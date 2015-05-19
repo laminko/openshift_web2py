@@ -5,7 +5,7 @@
 This file is part of web2py Web Framework (Copyrighted, 2007-2009).
 Developed by Massimo Di Pierro <mdipierro@cs.depaul.edu> and
 Robin B <robi123@gmail.com>.
-License: GPL v2
+License: LGPLv3
 """
 
 __all__ = ['MEMDB', 'Field']
@@ -20,6 +20,7 @@ import cStringIO
 import csv
 import copy
 import gluon.validators as validators
+from gluon.utils import web2py_uuid
 from gluon.storage import Storage
 from gluon import SQLTABLE
 import random
@@ -252,12 +253,15 @@ class Table(DALStorage):
 
         self._db(self.id > 0).delete()
 
+
     def insert(self, **fields):
-        id = self._create_id()
-        if self.update(id, **fields):
-            return long(id)
+        # Checks 3 times that the id is new. 3 times is enough!
+        for i in range(3):
+            id = self._create_id()
+            if self.get(id) is None and self.update(id, **fields):
+                return long(id)
         else:
-            return None
+            raise RuntimeError("Too many ID conflicts")
 
     def get(self, id):
         val = self._tableobj.get(self._id_to_key(id))
@@ -279,26 +283,22 @@ class Table(DALStorage):
     def delete(self, id):
         return self._tableobj.delete(self._id_to_key(id))
 
-    def _shard_key(self, shard):
-        return self._id_to_key('s/%s' % shard)
-
     def _id_to_key(self, id):
         return '__memdb__/t/%s/k/%s' % (self._tablename, str(id))
 
     def _create_id(self):
-        shard = random.randint(10, 99)
-        shard_id = self._shard_key(shard)
-        id = self._tableobj.incr(shard_id)
-        if not id:
-            if self._tableobj.set(shard_id, '0'):
-                id = 0
-            else:
-                raise Exception('cannot set memcache')
-        return long(str(shard) + str(id))
+        return long(web2py_uuid().replace('-',''),16)
 
     def __str__(self):
         return self._tablename
 
+    def __call__(self, id, **kwargs):
+        record = self.get(id)
+        if record is None:
+          return None
+        if kwargs and any(record[key]!=kwargs[key] for key in kwargs):
+            return None
+        return record
 
 class Expression(object):
 
@@ -502,9 +502,8 @@ class Query(object):
                 'Query: right side of filter must be a value or entity')
         if isinstance(left, Field) and left.name == 'id':
             if op == '=':
-                self.get_one = \
-                    QueryException(tablename=left._tablename,
-                                   id=long(right))
+                self.get_one = QueryException(
+                    tablename=left._tablename, id=long(right or 0))
                 return
             else:
                 raise SyntaxError('only equality by id is supported')

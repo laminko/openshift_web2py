@@ -7,33 +7,27 @@
 """
 import sys
 import os
-if os.path.isdir('gluon'):
-    sys.path.append(os.path.realpath('gluon'))
-else:
-    sys.path.append(os.path.realpath('../'))
-
-import unittest
 import doctest
-               
+import unittest
+from fix_path import fix_sys_path
+
+fix_sys_path(__file__)
+
+
 def load_tests(loader, tests, ignore):
 
-    tests.addTests(
-        doctest.DocTestSuite('validators',
-            optionflags=doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS,
-        )
-    )
     tests.addTests(
         doctest.DocTestSuite('html')
         )
     tests.addTests(
         doctest.DocTestSuite('utf8')
         )
-    
+
     tests.addTests(
         doctest.DocTestSuite('contrib.markmin.markmin2html',
         )
     )
-    
+
     return tests
 
 if __name__ == '__main__':

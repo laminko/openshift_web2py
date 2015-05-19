@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 
 """
-This file is part of the web2py Web Framework
-Copyrighted by Massimo Di Pierro <mdipierro@cs.depaul.edu>
-License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
+| This file is part of the web2py Web Framework
+| Copyrighted by Massimo Di Pierro <mdipierro@cs.depaul.edu>
+| License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
 
-The widget is called from web2py.
+The widget is called from web2py
+----------------------------------
 """
 
 import datetime
@@ -22,12 +23,12 @@ import math
 import logging
 import newcron
 import getpass
-import main
+import gluon.main as main
 
-from fileutils import read_file, write_file, create_welcome_w2p
-from settings import global_settings
-from shell import run, test
-from utils import is_valid_ip_address, is_loopback_ip_address, getipaddrinfo
+from gluon.fileutils import read_file, write_file, create_welcome_w2p
+from gluon.settings import global_settings
+from gluon.shell import run, test
+from gluon.utils import is_valid_ip_address, is_loopback_ip_address, getipaddrinfo
 
 
 ProgramName = 'web2py Web Framework'
@@ -63,11 +64,13 @@ def run_system_tests(options):
             if options.with_coverage:
                 try:
                     import coverage
-                    coverage_config = os.environ.get("COVERAGE_PROCESS_START",
-                                        os.path.join('gluon', 'tests', 'coverage.ini')
-                                    )
-                    call_args = ['coverage', 'run', '--rcfile=%s' % coverage_config, 
-                                    '-m', 'unittest', '-v', 'gluon.tests']
+                    coverage_config = os.environ.get(
+                        "COVERAGE_PROCESS_START",
+                        os.path.join('gluon', 'tests', 'coverage.ini'))
+
+                    call_args = ['coverage', 'run', '--rcfile=%s' %
+                                 coverage_config,
+                                 '-m', 'unittest', '-v', 'gluon.tests']
                 except:
                     sys.stderr.write('Coverage was not installed, skipping\n')
             sys.stderr.write("Python 2.7\n")
@@ -127,59 +130,6 @@ def start_browser(url, startup=False):
         print 'warning: unable to detect your browser'
 
 
-def presentation(root):
-    """ Draw the splash screen """
-    import Tkinter
-
-    root.withdraw()
-
-    dx = root.winfo_screenwidth()
-    dy = root.winfo_screenheight()
-
-    dialog = Tkinter.Toplevel(root, bg='white')
-    dialog.geometry('%ix%i+%i+%i' % (500, 300, dx / 2 - 200, dy / 2 - 150))
-
-    dialog.overrideredirect(1)
-    dialog.focus_force()
-
-    canvas = Tkinter.Canvas(dialog,
-                            background='white',
-                            width=500,
-                            height=300)
-    canvas.pack()
-    root.update()
-
-    logo = 'splashlogo.gif'
-    if os.path.exists(logo):
-        img = Tkinter.PhotoImage(file=logo)
-        pnl = Tkinter.Label(canvas, image=img, background='white', bd=0)
-        pnl.pack(side='top', fill='both', expand='yes')
-        # Prevent garbage collection of img
-        pnl.image = img
-
-    def add_label(text='Change Me', font_size=12, foreground='#195866', height=1):
-        return Tkinter.Label(
-            master=canvas,
-            width=250,
-            height=height,
-            text=text,
-            font=('Helvetica', font_size),
-            anchor=Tkinter.CENTER,
-            foreground=foreground,
-            background='white'
-        )
-
-    add_label('Welcome to...').pack(side='top')
-    add_label(ProgramName, 18, '#FF5C1F', 2).pack()
-    add_label(ProgramAuthor).pack()
-    add_label(ProgramVersion).pack()
-
-    root.update()
-    time.sleep(5)
-    dialog.destroy()
-    return
-
-
 class web2pyDialog(object):
     """ Main window dialog """
 
@@ -189,14 +139,19 @@ class web2pyDialog(object):
         import Tkinter
         import tkMessageBox
 
-        root.title('web2py server')
-        self.root = Tkinter.Toplevel(root)
+        bg_color = 'white'
+        root.withdraw()
+
+        self.root = Tkinter.Toplevel(root, bg=bg_color)
+        self.root.resizable(0, 0)
+        self.root.title(ProgramName)
+
         self.options = options
         self.scheduler_processes = {}
         self.menu = Tkinter.Menu(self.root)
         servermenu = Tkinter.Menu(self.menu, tearoff=0)
         httplog = os.path.join(self.options.folder, 'httpserver.log')
-        iconphoto = 'web2py.gif'
+        iconphoto = os.path.join('extras', 'icons', 'web2py.gif')
         if os.path.exists(iconphoto):
             img = Tkinter.PhotoImage(file=iconphoto)
             self.root.tk.call('wm', 'iconphoto', self.root._w, img)
@@ -243,81 +198,120 @@ class web2pyDialog(object):
 
         sticky = Tkinter.NW
 
+        # Prepare the logo area
+        self.logoarea = Tkinter.Canvas(self.root,
+                                background=bg_color,
+                                width=300,
+                                height=300)
+        self.logoarea.grid(row=0, column=0, columnspan=4, sticky=sticky)
+        self.logoarea.after(1000, self.update_canvas)
+
+        logo = os.path.join('extras', 'icons', 'splashlogo.gif')
+        if os.path.exists(logo):
+            img = Tkinter.PhotoImage(file=logo)
+            pnl = Tkinter.Label(self.logoarea, image=img, background=bg_color, bd=0)
+            pnl.pack(side='top', fill='both', expand='yes')
+            # Prevent garbage collection of img
+            pnl.image = img
+
+        # Prepare the banner area
+        self.bannerarea = Tkinter.Canvas(self.root,
+                                bg=bg_color,
+                                width=300,
+                                height=300)
+        self.bannerarea.grid(row=1, column=1, columnspan=2, sticky=sticky)
+
+        Tkinter.Label(self.bannerarea, anchor=Tkinter.N,
+                      text=str(ProgramVersion + "\n" + ProgramAuthor),
+                      font=('Helvetica', 11), justify=Tkinter.CENTER,
+                      foreground='#195866', background=bg_color,
+                      height=3).pack( side='top',
+                                      fill='both',
+                                      expand='yes')
+
+        self.bannerarea.after(1000, self.update_canvas)
+
         # IP
         Tkinter.Label(self.root,
-                      text='Server IP:',
-                      justify=Tkinter.LEFT).grid(row=0,
-                                                 column=0,
-                                                 sticky=sticky)
+                      text='Server IP:', bg=bg_color,
+                      justify=Tkinter.RIGHT).grid(row=4,
+                                                  column=1,
+                                                  sticky=sticky)
         self.ips = {}
         self.selected_ip = Tkinter.StringVar()
-        row = 0
+        row = 4
         ips = [('127.0.0.1', 'Local (IPv4)')] + \
             ([('::1', 'Local (IPv6)')] if socket.has_ipv6 else []) + \
             [(ip, 'Public') for ip in options.ips] + \
             [('0.0.0.0', 'Public')]
         for ip, legend in ips:
             self.ips[ip] = Tkinter.Radiobutton(
-                self.root, text='%s (%s)' % (legend, ip),
+                self.root, bg=bg_color, highlightthickness=0,
+                selectcolor='light grey', width=30,
+                anchor=Tkinter.W, text='%s (%s)' % (legend, ip),
+                justify=Tkinter.LEFT,
                 variable=self.selected_ip, value=ip)
-            self.ips[ip].grid(row=row, column=1, sticky=sticky)
-            if row == 0:
+            self.ips[ip].grid(row=row, column=2, sticky=sticky)
+            if row == 4:
                 self.ips[ip].select()
             row += 1
         shift = row
+
         # Port
         Tkinter.Label(self.root,
-                      text='Server Port:',
-                      justify=Tkinter.LEFT).grid(row=shift,
-                                                 column=0,
-                                                 sticky=sticky)
+                      text='Server Port:', bg=bg_color,
+                      justify=Tkinter.RIGHT).grid(row=shift,
+                                                  column=1, pady=10,
+                                                  sticky=sticky)
 
         self.port_number = Tkinter.Entry(self.root)
         self.port_number.insert(Tkinter.END, self.options.port)
-        self.port_number.grid(row=shift, column=1, sticky=sticky)
+        self.port_number.grid(row=shift, column=2, sticky=sticky, pady=10)
 
         # Password
         Tkinter.Label(self.root,
-                      text='Choose Password:',
-                      justify=Tkinter.LEFT).grid(row=shift + 1,
-                                                 column=0,
-                                                 sticky=sticky)
+                      text='Choose Password:', bg=bg_color,
+                      justify=Tkinter.RIGHT).grid(row=shift + 1,
+                                                  column=1,
+                                                  sticky=sticky)
 
         self.password = Tkinter.Entry(self.root, show='*')
         self.password.bind('<Return>', lambda e: self.start())
         self.password.focus_force()
-        self.password.grid(row=shift + 1, column=1, sticky=sticky)
+        self.password.grid(row=shift + 1, column=2, sticky=sticky)
 
         # Prepare the canvas
         self.canvas = Tkinter.Canvas(self.root,
-                                     width=300,
+                                     width=400,
                                      height=100,
                                      bg='black')
-        self.canvas.grid(row=shift + 2, column=0, columnspan=2)
+        self.canvas.grid(row=shift + 2, column=1, columnspan=2, pady=5,
+                         sticky=sticky)
         self.canvas.after(1000, self.update_canvas)
 
         # Prepare the frame
         frame = Tkinter.Frame(self.root)
-        frame.grid(row=shift + 3, column=0, columnspan=2)
+        frame.grid(row=shift + 3, column=1, columnspan=2, pady=5,
+                   sticky=sticky)
 
         # Start button
         self.button_start = Tkinter.Button(frame,
                                            text='start server',
                                            command=self.start)
 
-        self.button_start.grid(row=0, column=0)
+        self.button_start.grid(row=0, column=0, sticky=sticky)
 
         # Stop button
         self.button_stop = Tkinter.Button(frame,
                                           text='stop server',
                                           command=self.stop)
 
-        self.button_stop.grid(row=0, column=1)
+        self.button_stop.grid(row=0, column=1,  sticky=sticky)
         self.button_stop.configure(state='disabled')
 
         if options.taskbar:
-            import contrib.taskbar_widget
-            self.tb = contrib.taskbar_widget.TaskBarIcon()
+            import gluon.contrib.taskbar_widget
+            self.tb = gluon.contrib.taskbar_widget.TaskBarIcon()
             self.checkTaskBar()
 
             if options.password != '<ask>':
@@ -331,16 +325,18 @@ class web2pyDialog(object):
         apps = []
         available_apps = [arq for arq in os.listdir('applications/')]
         available_apps = [arq for arq in available_apps
-                          if os.path.exists('applications/%s/models/scheduler.py' % arq)]
+                          if os.path.exists(
+                'applications/%s/models/scheduler.py' % arq)]
         if start:
-            #the widget takes care of starting the scheduler
+            # the widget takes care of starting the scheduler
             if self.options.scheduler and self.options.with_scheduler:
-                apps = [app.strip() for app in self.options.scheduler.split(',')
+                apps = [app.strip() for app
+                        in self.options.scheduler.split(',')
                         if app in available_apps]
         for app in apps:
             self.try_start_scheduler(app)
 
-        #reset the menu
+        # reset the menu
         self.schedmenu.delete(0, len(available_apps))
         for arq in available_apps:
             if arq not in self.scheduler_processes:
@@ -384,7 +380,7 @@ class web2pyDialog(object):
             t.start()
 
     def checkTaskBar(self):
-        """ Check taskbar status """
+        """ Checks taskbar status """
 
         if self.tb.status:
             if self.tb.status[0] == self.tb.EnumStatus.QUIT:
@@ -406,7 +402,7 @@ class web2pyDialog(object):
         self.root.after(1000, self.checkTaskBar)
 
     def update(self, text):
-        """ Update app text """
+        """ Updates app text """
 
         try:
             self.text.configure(state='normal')
@@ -416,18 +412,19 @@ class web2pyDialog(object):
             pass  # ## this should only happen in case app is destroyed
 
     def connect_pages(self):
-        """ Connect pages """
-        #reset the menu
+        """ Connects pages """
+        # reset the menu
         available_apps = [arq for arq in os.listdir('applications/')
-                          if os.path.exists('applications/%s/__init__.py' % arq)]
+                          if os.path.exists(
+                'applications/%s/__init__.py' % arq)]
         self.pagesmenu.delete(0, len(available_apps))
         for arq in available_apps:
             url = self.url + arq
-            self.pagesmenu.add_command(label=url,
-                                       command=lambda u=url: start_browser(u))
+            self.pagesmenu.add_command(
+                label=url, command=lambda u=url: start_browser(u))
 
     def quit(self, justHide=False):
-        """ Finish the program execution """
+        """ Finishes the program execution """
         if justHide:
             self.root.withdraw()
         else:
@@ -454,13 +451,13 @@ class web2pyDialog(object):
             sys.exit(0)
 
     def error(self, message):
-        """ Show error message """
+        """ Shows error message """
 
         import tkMessageBox
         tkMessageBox.showerror('web2py start server', message)
 
     def start(self):
-        """ Start web2py server """
+        """ Starts web2py server """
 
         password = self.password.get()
 
@@ -478,7 +475,8 @@ class web2pyDialog(object):
             return self.error('invalid port number')
 
         # Check for non default value for ssl inputs
-        if (len(self.options.ssl_certificate) > 0) or (len(self.options.ssl_private_key) > 0):
+        if (len(self.options.ssl_certificate) > 0 or
+            len(self.options.ssl_private_key) > 0):
             proto = 'https'
         else:
             proto = 'http'
@@ -496,7 +494,7 @@ class web2pyDialog(object):
                 password,
                 pid_filename=options.pid_filename,
                 log_filename=options.log_filename,
-                profiler_filename=options.profiler_filename,
+                profiler_dir=options.profiler_dir,
                 ssl_certificate=options.ssl_certificate,
                 ssl_private_key=options.ssl_private_key,
                 ssl_ca_certificate=options.ssl_ca_certificate,
@@ -521,8 +519,8 @@ class web2pyDialog(object):
         self.button_stop.configure(state='normal')
 
         if not options.taskbar:
-            thread.start_new_thread(start_browser,
-                                    (get_url(ip, proto=proto, port=port), True))
+            thread.start_new_thread(
+                start_browser, (get_url(ip, proto=proto, port=port), True))
 
         self.password.configure(state='readonly')
         [ip.configure(state='disabled') for ip in self.ips.values()]
@@ -539,7 +537,7 @@ class web2pyDialog(object):
         return False
 
     def stop(self):
-        """ Stop web2py server """
+        """ Stops web2py server """
 
         self.button_start.configure(state='normal')
         self.button_stop.configure(state='disabled')
@@ -552,7 +550,7 @@ class web2pyDialog(object):
             self.tb.SetServerStopped()
 
     def update_canvas(self):
-        """ Update canvas """
+        """ Updates canvas """
 
         try:
             t1 = os.path.getsize('httpserver.log')
@@ -579,7 +577,7 @@ class web2pyDialog(object):
         except BaseException:
             self.t0 = time.time()
             self.t0 = t1
-            self.p0 = [100] * 300
+            self.p0 = [100] * 400
             self.q0 = [self.canvas.create_line(i, 100, i + 1, 100,
                        fill='green') for i in xrange(len(self.p0) - 1)]
 
@@ -619,6 +617,12 @@ def console():
                       dest='port',
                       type='int',
                       help='port of server (8000)')
+
+    parser.add_option('-G',
+                      '--GAE',
+                      default=None,
+                      dest='gae',
+                      help="'-G configure' will create app.yaml and gaehandler.py")
 
     msg = ('password to be used for administration '
            '(use -a "<recycle>" to reuse the last password))')
@@ -733,6 +737,13 @@ def console():
                       default=False,
                       help='disable all output')
 
+    parser.add_option('-e',
+                      '--errors_to_console',
+                      action='store_true',
+                      dest='print_errors',
+                      default=False,
+                      help='log all errors to console')
+
     msg = ('set debug output level (0-100, 0 means all, 100 means none; '
            'default is 30)')
     parser.add_option('-D',
@@ -815,12 +826,6 @@ def console():
                       default=None,
                       help=msg)
 
-    parser.add_option('-W',
-                      '--winservice',
-                      dest='winservice',
-                      default='',
-                      help='-W install|start|stop as Windows service')
-
     msg = 'trigger a cron run manually; usually invoked from a system crontab'
     parser.add_option('-C',
                       '--cron',
@@ -858,9 +863,9 @@ def console():
 
     parser.add_option('-F',
                       '--profiler',
-                      dest='profiler_filename',
+                      dest='profiler_dir',
                       default=None,
-                      help='profiler filename')
+                      help='profiler dir')
 
     parser.add_option('-t',
                       '--taskbar',
@@ -907,7 +912,7 @@ def console():
                       dest='run_system_tests',
                       default=False,
                       help=msg)
-    
+
     msg = ('adds coverage reporting (needs --run_system_tests), '
            'python 2.7 and the coverage module installed. '
            'You can alter the default path setting the environmental '
@@ -918,7 +923,7 @@ def console():
                       dest='with_coverage',
                       default=False,
                       help=msg)
-                      
+
     if '-A' in sys.argv:
         k = sys.argv.index('-A')
     elif '--args' in sys.argv:
@@ -931,8 +936,22 @@ def console():
     global_settings.cmd_options = options
     global_settings.cmd_args = args
 
+    if options.gae:
+        if not os.path.exists('app.yaml'):
+            name = raw_input("Your GAE app name: ")
+            content = open(os.path.join('examples', 'app.example.yaml'), 'rb').read()
+            open('app.yaml', 'wb').write(content.replace("yourappname", name))
+        else:
+            print "app.yaml alreday exists in the web2py folder"
+        if not os.path.exists('gaehandler.py'):
+            content = open(os.path.join('handlers', 'gaehandler.py'), 'rb').read()
+            open('gaehandler.py', 'wb').write(content)
+        else:
+            print "gaehandler.py alreday exists in the web2py folder"
+        sys.exit(0)
+
     try:
-        options.ips = list(set( # no duplicates
+        options.ips = list(set(  # no duplicates
             [addrinfo[4][0] for addrinfo in getipaddrinfo(socket.getfqdn())
              if not is_loopback_ip_address(addrinfo=addrinfo)]))
     except socket.gaierror:
@@ -998,7 +1017,7 @@ def console():
         if not os.path.exists('applications/__init__.py'):
             write_file('applications/__init__.py', '')
 
-    return (options, args)
+    return options, args
 
 
 def check_existent_app(options, appname):
@@ -1015,7 +1034,7 @@ def get_code_for_scheduler(app, options):
         code = code % ("','".join(app[1:]))
     app_ = app[0]
     if not check_existent_app(options, app_):
-        print "Application '%s' doesn't exist, skipping" % (app_)
+        print "Application '%s' doesn't exist, skipping" % app_
         return None, None
     return app_, code
 
@@ -1063,7 +1082,7 @@ def start_schedulers(options):
 
 
 def start(cron=True):
-    """ Start server  """
+    """ Starts server  """
 
     # ## get command line arguments
 
@@ -1074,7 +1093,7 @@ def start(cron=True):
         print ProgramAuthor
         print ProgramVersion
 
-    from dal import DRIVERS
+    from pydal.drivers import DRIVERS
     if not options.nobanner:
         print 'Database drivers available: %s' % ', '.join(DRIVERS)
 
@@ -1093,11 +1112,11 @@ def start(cron=True):
             if hasattr(options, key):
                 setattr(options, key, getattr(options2, key))
 
-    if False and not os.path.exists('logging.conf') and \
-            os.path.exists('logging.example.conf'):
+    logfile0 = os.path.join('extras', 'examples', 'logging.example.conf')
+    if not os.path.exists('logging.conf') and os.path.exists(logfile0):
         import shutil
         sys.stdout.write("Copying logging.conf.example to logging.conf ... ")
-        shutil.copyfile('logging.example.conf', 'logging.conf')
+        shutil.copyfile('logging.example.conf', logfile0)
         sys.stdout.write("OK\n")
 
     # ## if -T run doctests (no cron)
@@ -1107,10 +1126,13 @@ def start(cron=True):
 
     # ## if -S start interactive shell (also no cron)
     if options.shell:
+        if options.folder:
+            os.chdir(options.folder)
         if not options.args is None:
             sys.argv[:] = options.args
         run(options.shell, plain=options.plain, bpython=options.bpython,
-            import_models=options.import_models, startfile=options.run)
+            import_models=options.import_models, startfile=options.run,
+            cronjob=options.cronjob)
         return
 
     # ## if -C start cron run (extcron) and exit
@@ -1134,23 +1156,6 @@ def start(cron=True):
             start_schedulers(options)
         except KeyboardInterrupt:
             pass
-        return
-
-    # ## if -W install/start/stop web2py as service
-    if options.winservice:
-        if os.name == 'nt':
-            try:
-                from winservice import register_service_handler, Web2pyService
-                register_service_handler(
-                    argv=['', options.winservice],
-                    opt_file=options.config,
-                    cls=Web2pyService)
-            except ImportError:
-                print 'Error: Missing python module winservice'
-                sys.exit(1)
-        else:
-            print 'Error: Windows services not supported on this platform'
-            sys.exit(1)
         return
 
     # ## if -H cron is enabled in this *process*
@@ -1178,21 +1183,19 @@ def start(cron=True):
 
     root = None
 
-    if not options.nogui:
+    if not options.nogui and options.password == '<ask>':
         try:
             import Tkinter
             havetk = True
-        except ImportError:
-            logger.warn(
-                'GUI not available because Tk library is not installed')
-            havetk = False
-            options.nogui = True
-
-        if options.password == '<ask>' and havetk or options.taskbar and havetk:
             try:
                 root = Tkinter.Tk()
             except:
                 pass
+        except (ImportError, OSError):
+            logger.warn(
+                'GUI not available because Tk library is not installed')
+            havetk = False
+            options.nogui = True
 
     if root:
         root.focus_force()
@@ -1207,8 +1210,6 @@ end tell
 """ % (os.getpid())
             os.system("/usr/bin/osascript -e '%s'" % applescript)
 
-        if not options.quiet:
-            presentation(root)
         master = web2pyDialog(root, options)
         signal.signal(signal.SIGTERM, lambda a, b: master.quit())
 
@@ -1251,16 +1252,42 @@ end tell
     url = get_url(ip, proto=proto, port=port)
 
     if not options.nobanner:
-        print 'please visit:'
-        print '\t', url
-        print 'use "kill -SIGTERM %i" to shutdown the web2py server' % os.getpid()
+        message = '\nplease visit:\n\t%s\n' % url
+        if sys.platform.startswith('win'):
+            message += 'use "taskkill /f /pid %i" to shutdown the web2py server\n\n' % os.getpid()
+        else:
+            message += 'use "kill -SIGTERM %i" to shutdown the web2py server\n\n' % os.getpid()
+        print message
+
+    # enhance linecache.getline (used by debugger) to look at the source file
+    # if the line was not found (under py2exe & when file was modified)
+    import linecache
+    py2exe_getline = linecache.getline
+
+    def getline(filename, lineno, *args, **kwargs):
+        line = py2exe_getline(filename, lineno, *args, **kwargs)
+        if not line:
+            try:
+                f = open(filename, "r")
+                try:
+                    for i, line in enumerate(f):
+                        if lineno == i + 1:
+                            break
+                    else:
+                        line = None
+                finally:
+                    f.close()
+            except (IOError, OSError):
+                line = None
+        return line
+    linecache.getline = getline
 
     server = main.HttpServer(ip=ip,
                              port=port,
                              password=options.password,
                              pid_filename=options.pid_filename,
                              log_filename=options.log_filename,
-                             profiler_filename=options.profiler_filename,
+                             profiler_dir=options.profiler_dir,
                              ssl_certificate=options.ssl_certificate,
                              ssl_private_key=options.ssl_private_key,
                              ssl_ca_certificate=options.ssl_ca_certificate,

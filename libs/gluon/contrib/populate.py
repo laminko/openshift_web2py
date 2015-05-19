@@ -90,13 +90,13 @@ def populate(table, n=None, default=True, compute=False, contents={}):
     can be used in two ways:
 
     >>> populate(db.tablename, n=100)
-    
-    or 
+
+    or
 
     >>> for k,row in enumerate(populate(db.tablename)): print row
     """
 
-    generator = populate_generator(table, default=default, 
+    generator = populate_generator(table, default=default,
                                    compute=compute, contents=contents)
     if n is not None:
         for k,record in enumerate(generator):
@@ -133,6 +133,8 @@ def populate_generator(table, default=True, compute=False, contents={}):
                 continue
             elif field.type == 'id':
                 continue
+            elif field.type == 'upload':
+                continue
             elif default and not field.default in (None, ''):
                 record[fieldname] = field.default
             elif compute and field.compute:
@@ -153,8 +155,6 @@ def populate_generator(table, default=True, compute=False, contents={}):
                 record[fieldname] = datetime.time(h, m, 0)
             elif field.type == 'password':
                 record[fieldname] = ''
-            elif field.type == 'upload':
-                record[fieldname] = None
             elif field.type == 'integer' and \
                     hasattr(field.requires, 'options'):
                 options = field.requires.options(zero=False)
@@ -246,8 +246,8 @@ def populate_generator(table, default=True, compute=False, contents={}):
                         record[fieldname] = random.choice(LAST_NAMES)
                     elif fieldname.find('username')>=0:
                         record[fieldname] = random.choice(FIRST_NAMES).lower()+str(random.randint(1000,9999))
-                    else:    
-                        record[fieldname] = random.choice(FIRST_NAMES)+' '+random.choice(LAST_NAMES)                    
+                    else:
+                        record[fieldname] = random.choice(FIRST_NAMES)+' '+random.choice(LAST_NAMES)
                 elif fieldname.find('phone')>=0:
                     record[fieldname] = '(%s%s%s) %s%s%s-%s%s%s%s' % (
                         random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'),random.choice('1234567890'))
@@ -266,5 +266,5 @@ def populate_generator(table, default=True, compute=False, contents={}):
 
 if __name__ == '__main__':
     ell = Learner()
-    ell.loadd(eval(IUP))
+    ell.loadd(IUP)
     print ell.generate(1000, prefix=None)

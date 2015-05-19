@@ -4,14 +4,11 @@
     Unit tests for gluon.template
 """
 
-import sys
-import os
-if os.path.isdir('gluon'):
-    sys.path.append(os.path.realpath('gluon'))
-else:
-    sys.path.append(os.path.realpath('../'))
-
 import unittest
+from fix_path import fix_sys_path
+
+fix_sys_path(__file__)
+
 from template import render
 
 

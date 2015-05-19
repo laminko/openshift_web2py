@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-This file is part of the web2py Web Framework
-Developed by Massimo Di Pierro <mdipierro@cs.depaul.edu>,
-limodou <limodou@gmail.com> and srackham <srackham@gmail.com>.
-License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
+| This file is part of the web2py Web Framework
+| Developed by Massimo Di Pierro <mdipierro@cs.depaul.edu>,
+| limodou <limodou@gmail.com> and srackham <srackham@gmail.com>.
+| License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
 
+Web2py environment in the shell
+--------------------------------
 """
 
 import os
@@ -18,17 +20,37 @@ import re
 import optparse
 import glob
 import traceback
-import fileutils
-from settings import global_settings
-from utils import web2py_uuid
-from compileapp import build_environment, read_pyc, run_models_in
-from restricted import RestrictedError
-from globals import Request, Response, Session
-from storage import Storage
-from admin import w2p_unpack
-from dal import BaseAdapter
+import gluon.fileutils as fileutils
+from gluon.settings import global_settings
+from gluon.utils import web2py_uuid
+from gluon.compileapp import build_environment, read_pyc, run_models_in
+from gluon.restricted import RestrictedError
+from gluon.globals import Request, Response, Session
+from gluon.storage import Storage, List
+from gluon.admin import w2p_unpack
+from pydal.base import BaseAdapter
 
 logger = logging.getLogger("web2py")
+
+
+def enable_autocomplete_and_history(adir, env):
+    try:
+        import rlcompleter
+        import atexit
+        import readline
+    except ImportError:
+        pass
+    else:
+        readline.parse_and_bind("bind ^I rl_complete"
+                                if sys.platform == 'darwin'
+                                else "tab: complete")
+        history_file = os.path.join(adir, '.pythonhistory')
+        try:
+            readline.read_history_file(history_file)
+        except IOError:
+            open(history_file, 'a').close()
+        atexit.register(readline.write_history_file, history_file)
+        readline.set_completer(rlcompleter.Completer(env).complete)
 
 
 def exec_environment(
@@ -37,22 +59,18 @@ def exec_environment(
     response=None,
     session=None,
 ):
-    """
-    .. function:: gluon.shell.exec_environment([pyfile=''[, request=Request()
-        [, response=Response[, session=Session()]]]])
+    """Environment builder and module loader.
 
-        Environment builder and module loader.
+    Builds a web2py environment and optionally executes a Python file into
+    the environment.
 
-
-        Builds a web2py environment and optionally executes a Python
-        file into the environment.
-        A Storage dictionary containing the resulting environment is returned.
-        The working directory must be web2py root -- this is the web2py default.
+    A Storage dictionary containing the resulting environment is returned.
+    The working directory must be web2py root -- this is the web2py default.
 
     """
 
     if request is None:
-        request = Request()
+        request = Request({})
     if response is None:
         response = Response()
     if session is None:
@@ -84,20 +102,18 @@ def env(
     extra_request={},
 ):
     """
-    Return web2py execution environment for application (a), controller (c),
+    Returns web2py execution environment for application (a), controller (c),
     function (f).
     If import_models is True the exec all application models into the
     environment.
 
-    extra_request allows you to pass along any extra
-    variables to the request object before your models
-    get executed. This was mainly done to support
-    web2py_utils.test_runner, however you can use it
-    with any wrapper scripts that need access to the
-    web2py environment.
+    extra_request allows you to pass along any extra variables to the request
+    object before your models get executed. This was mainly done to support
+    web2py_utils.test_runner, however you can use it with any wrapper scripts
+    that need access to the web2py environment.
     """
 
-    request = Request()
+    request = Request({})
     response = Response()
     session = Session()
     request.application = a
@@ -112,13 +128,26 @@ def env(
     request.function = f or 'index'
     response.view = '%s/%s.html' % (request.controller,
                                     request.function)
-    request.env.path_info = '/%s/%s/%s' % (a, c, f)
-    request.env.http_host = '127.0.0.1:8000'
+    if global_settings.cmd_options:
+        ip = global_settings.cmd_options.ip
+        port = global_settings.cmd_options.port
+    else:
+        ip, port = '127.0.0.1', '8000'
+    request.env.http_host = '%s:%s' % (ip, port)
     request.env.remote_addr = '127.0.0.1'
     request.env.web2py_runtime_gae = global_settings.web2py_runtime_gae
 
     for k, v in extra_request.items():
         request[k] = v
+
+    path_info = '/%s/%s/%s' % (a, c, f)
+    if request.args:
+        path_info = '%s/%s' % (path_info, '/'.join(request.args))
+    if request.vars:
+        vars = ['%s=%s' % (k, v) if v else '%s' % k
+                for (k, v) in request.vars.iteritems()]
+        path_info = '%s?%s' % (path_info, '&'.join(vars))
+    request.env.path_info = path_info
 
     # Monkey patch so credentials checks pass.
 
@@ -159,21 +188,22 @@ def run(
     import_models=False,
     startfile=None,
     bpython=False,
-    python_code=False
-):
+    python_code=False,
+    cronjob=False):
     """
     Start interactive shell or run Python script (startfile) in web2py
     controller environment. appname is formatted like:
 
-    a      web2py application name
-    a/c    exec the controller c into the application environment
+    - a : web2py application name
+    - a/c : exec the controller c into the application environment
     """
 
-    (a, c, f) = parse_path_info(appname)
+    (a, c, f, args, vars) = parse_path_info(appname, av=True)
     errmsg = 'invalid application name: %s' % appname
     if not a:
         die(errmsg)
     adir = os.path.join('applications', a)
+
     if not os.path.exists(adir):
         if sys.stdin and not sys.stdin.name == '/dev/null':
             confirm = raw_input(
@@ -200,18 +230,23 @@ def run(
 
     if c:
         import_models = True
-    _env = env(a, c=c, f=f, import_models=import_models)
+    extra_request = {}
+    if args:
+        extra_request['args'] = args
+    if vars:
+        extra_request['vars'] = vars
+    _env = env(a, c=c, f=f, import_models=import_models, extra_request=extra_request)
     if c:
-        cfile = os.path.join('applications', a, 'controllers', c + '.py')
-        if not os.path.isfile(cfile):
-            cfile = os.path.join('applications', a, 'compiled',
+        pyfile = os.path.join('applications', a, 'controllers', c + '.py')
+        pycfile = os.path.join('applications', a, 'compiled',
                                  "controllers_%s_%s.pyc" % (c, f))
-            if not os.path.isfile(cfile):
-                die(errmsg)
-            else:
-                exec read_pyc(cfile) in _env
+        if ((cronjob and os.path.isfile(pycfile))
+            or not os.path.isfile(pyfile)):
+            exec read_pyc(pycfile) in _env
+        elif os.path.isfile(pyfile):
+            execfile(pyfile, _env)
         else:
-            execfile(cfile, _env)
+            die(errmsg)
 
     if f:
         exec ('print %s()' % f, _env)
@@ -255,7 +290,15 @@ def run(
             else:
                 try:
                     import IPython
-                    if IPython.__version__ >= '0.11':
+                    if IPython.__version__ > '1.0.0':
+                        IPython.start_ipython(user_ns=_env)
+                        return
+                    elif IPython.__version__ == '1.0.0':
+                        from IPython.terminal.embed import InteractiveShellEmbed
+                        shell = InteractiveShellEmbed(user_ns=_env)
+                        shell()
+                        return
+                    elif IPython.__version__ >= '0.11':
                         from IPython.frontend.terminal.embed import InteractiveShellEmbed
                         shell = InteractiveShellEmbed(user_ns=_env)
                         shell()
@@ -271,24 +314,29 @@ def run(
                 except:
                     logger.warning(
                         'import IPython error; use default python shell')
-        try:
-            import readline
-            import rlcompleter
-        except ImportError:
-            pass
-        else:
-            readline.set_completer(rlcompleter.Completer(_env).complete)
-            readline.parse_and_bind('tab:complete')
+        enable_autocomplete_and_history(adir, _env)
         code.interact(local=_env)
 
 
-def parse_path_info(path_info):
+def parse_path_info(path_info, av=False):
     """
-    Parse path info formatted like a/c/f where c and f are optional
-    and a leading / accepted.
+    Parses path info formatted like a/c/f where c and f are optional
+    and a leading `/` is accepted.
     Return tuple (a, c, f). If invalid path_info a is set to None.
     If c or f are omitted they are set to None.
+    If av=True, parse args and vars
     """
+    if av:
+        vars = None
+        if '?' in path_info:
+            path_info, query = path_info.split('?', 2)
+            vars = Storage()
+            for var in query.split('&'):
+                (var, val) = var.split('=', 2) if '=' in var else (var, None)
+                vars[var] = val
+        items = List(path_info.split('/'))
+        args = List(items[3:]) if len(items) > 3 else None
+        return (items(0), items(1), items(2), args, vars)
 
     mo = re.match(r'^/?(?P<a>\w+)(/(?P<c>\w+)(/(?P<f>\w+))?)?$',
                   path_info)
@@ -307,9 +355,9 @@ def test(testpath, import_models=True, verbose=False):
     """
     Run doctests in web2py environment. testpath is formatted like:
 
-    a      tests all controllers in application a
-    a/c    tests controller c in application a
-    a/c/f  test function f in controller c, application a
+    - a: tests all controllers in application a
+    - a/c: tests controller c in application a
+    - a/c/f  test function f in controller c, application a
 
     Where a, c and f are application, controller and function names
     respectively. If the testpath is a file name the file is tested.
@@ -356,9 +404,10 @@ def test(testpath, import_models=True, verbose=False):
 
                 globs = env(a, c=c, f=f, import_models=import_models)
                 execfile(testfile, globs)
-                doctest.run_docstring_examples(obj, globs=globs,
-                                               name='%s: %s' % (os.path.basename(testfile),
-                                                                name), verbose=verbose)
+                doctest.run_docstring_examples(
+                    obj, globs=globs,
+                    name='%s: %s' % (os.path.basename(testfile),
+                                     name), verbose=verbose)
                 if type(obj) in (types.TypeType, types.ClassType):
                     for attr_name in dir(obj):
 
@@ -386,8 +435,8 @@ def execute_from_command_line(argv=None):
     parser = optparse.OptionParser(usage=get_usage())
 
     parser.add_option('-S', '--shell', dest='shell', metavar='APPNAME',
-                      help='run web2py in interactive shell or IPython(if installed) ' +
-                      'with specified appname')
+                      help='run web2py in interactive shell ' +
+                      'or IPython(if installed) with specified appname')
     msg = 'run web2py in interactive shell or bpython (if installed) with'
     msg += ' specified appname (if app does not exist it will be created).'
     msg += '\n Use combined with --shell'
