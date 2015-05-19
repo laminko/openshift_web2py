@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
-  <head>
+
+<head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
     <title>Openshift web2py by lminko</title>
@@ -11,62 +12,114 @@
     <!--[if lt IE 9]>
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
-  </head>
-  <body>
+</head>
+
+<body>
     <div class="wrapper">
-      <header>
-        <h1>Openshift web2py</h1>
-        <p>Web2py skeleton for OpenShift.</p>
+        <header>
+            <h1>Openshift web2py</h1>
+            <p>Web2py skeleton for OpenShift.</p>
 
-        <p class="view"><a href="https://github.com/lminko/openshift_web2py">View the Project on GitHub <small>lminko/openshift_web2py</small></a></p>
+            <p class="view"><a href="https://github.com/lminko/openshift_web2py">View the Project on GitHub <small>lminko/openshift_web2py</small></a></p>
 
+            <ul>
+                <li><a href="https://github.com/lminko/openshift_web2py/zipball/master">Download <strong>ZIP File</strong></a></li>
+                <li><a href="https://github.com/lminko/openshift_web2py/tarball/master">Download <strong>TAR Ball</strong></a></li>
+                <li><a href="https://github.com/lminko/openshift_web2py">View On <strong>GitHub</strong></a></li>
+            </ul>
+        </header>
+        <section>
+            <h3>
+                <a id="welcome-to-github-pages" class="anchor" href="#welcome-to-github-pages" aria-hidden="true">
+                    <span class="octicon octicon-link"></span>
+                </a>Web2py OpenShift Cartridge</h3>
 
-        <ul>
-          <li><a href="https://github.com/lminko/openshift_web2py/zipball/master">Download <strong>ZIP File</strong></a></li>
-          <li><a href="https://github.com/lminko/openshift_web2py/tarball/master">Download <strong>TAR Ball</strong></a></li>
-          <li><a href="https://github.com/lminko/openshift_web2py">View On <strong>GitHub</strong></a></li>
-        </ul>
-      </header>
-      <section>
-        <h3>
-<a id="welcome-to-github-pages" class="anchor" href="#welcome-to-github-pages" aria-hidden="true"><span class="octicon octicon-link"></span></a>Web2py OpenShift Cartridge</h3>
+            <p>
+            <b>NOTE:</b>This project is forked from <a href="https://github.com/prelegalwonder/openshift_web2py">https://github.com/prelegalwonder/openshift_web2py</a>
+            <br/>
+            <b>NOTE:</b>
+                This guide is written by its original author and can be seen at <a href="https://github.com/prelegalwonder/openshift_web2py">https://github.com/prelegalwonder/openshift_web2py</a>
+            </p>
 
-<p>This project is forked from <a href="https://github.com/prelegalwonder/openshift_web2py">https://github.com/prelegalwonder/openshift_web2py</a></p>
-<p>To add cartridge</p>
+            <body><h1 id="web2py-on-openshift">Web2Py on OpenShift</h1>
+<p>This git repository helps you get up and running quickly w/ a web2py installation
+on OpenShift.  The web2py project name used in this repo is 'web2py'</p>
+<p>When you access this application for the first time, the sqlite database is
+initialized from the defined DAL in your model. This is the stock database that is created
+for the welcome application in web2py.</p>
+<h2 id="running-on-openshift">Running on OpenShift</h2>
+<p>Create an account at <a href="http://openshift.redhat.com/">http://openshift.redhat.com/</a></p>
+<p>Create a python-2.6 application</p>
+<pre><code>rhc app <span class="operator"><span class="keyword">create</span> -a web2py -t python-<span class="number">2.6</span>
+</span></code></pre><p>Add this upstream repo</p>
+<pre><code><span class="title">cd</span> web2py
+git remote add upstream -m master <span class="url">git://github.com/prelegalwonder/openshift_web2py.git</span>
+git pull -s recursive -X theirs upstream master
+</code></pre><p>Note: If you want a specific release and not the latest snapshot, replace "master" with the branch name in the above lines (ie. 2.3.2).</p>
+<p>Then push the repo upstream</p>
+<pre><code><span class="title">git</span> push
+</code></pre><p>That's it, you can now checkout your application at:</p>
+<pre><code><span class="symbol">http:</span>/<span class="regexp">/web2py-$yournamespace.rhcloud.com
+</span></code></pre><p>The default web2py application that loads will be the "welcome" application. You can change this by modifying
+the routes as you usually would with web2py.</p>
+<p>For the admin app to work you must put your password hash in parameters_8080.py in wsgi/web2py/. </p>
+<p><del><strong>Update:</strong> Currently if you use the IDE in the cloud it doesn't save it to the remote git repo. Every time the in-cloud app is started its copied to a separate runtime directory. Definitely backup your changes. I'm thinking of how to handle this for people who want to use the in-cloud IDE. Keep in mind you can also use the openshift deployer in master from a seperate local vanilla instance.</del></p>
+<p><strong>Update:</strong> Using the IDE should now save changes in the gear instance data dir. The caveat here is that when you do a git pull, it will not pull your changes back locally. Continued investigation is needed here. </p>
+<h2 id="database-setup">Database Setup</h2>
+<p><strong>Enabling db cartridges:</strong>
+If you want to use something beyond the sqlite provider that is default for applications, you'll need to install one of
+Openshift's db cartridges. You can see what's available with the following command.</p>
+<pre><code>$&gt; rhc app cartridge
 
-<pre><code>$ cd your_repo_root/repo_name
-$ git fetch origin
-$ git checkout gh-pages
-</code></pre>
+List <span class="keyword">of</span> supported embedded cartridges:
 
-<p>If you're using the GitHub for Mac, simply sync your repository and you'll see the new branch.</p>
+Obtaining list <span class="keyword">of</span> cartridges (please excuse the delay)...
+mongodb-<span class="number">2.0</span>, cron-<span class="number">1.4</span>, mysql-<span class="number">5.1</span>, postgresql-<span class="number">8.4</span>, haproxy-<span class="number">1.4</span>, <span class="number">10</span>gen-mms-agent-<span class="number">0.1</span>, phpmyadmin-<span class="number">3.4</span>, metrics-<span class="number">0.1</span>, rockmongo-<span class="number">1.1</span>, jenkins-client-<span class="number">1.4</span>
+</code></pre><p>Once you've identified which db cartridge you'd like to use you can install it with the following command.</p>
+<pre><code>$&gt; rhc app cartridge add -c <span class="tag">&lt;<span class="title">cartridge_name</span>&gt;</span> -a <span class="tag">&lt;<span class="title">your_app</span>&gt;</span>
+</code></pre><p>This will output some info regarding how to connect to your db. You can record this somewhere if you like, however all of this
+information is available within the gear and you'll see how to access it in the next section.</p>
+<p><strong>Connecting to db:</strong>
+Openshift makes using it's available database cartridges very simple by providing a list of various environment variables
+you can use depending on the connection format you want to use.</p>
+<p>Openshift provides two classes of db cartridge; RDBMS and NOSQL. RDBMS uses the environment variable OPENSHIFT_DB_* where NOSQL uses OPENSHIFT_NOSQL_DB_* </p>
+<p>MySQL and PostgreSQL are RDBM's style of database, where MongoDB is a NOSQL style database. </p>
+<p>So if you wanted to get the host of your mysql environment, you'd use OPENSHIFT_DB_HOST vs OPENSHIFT_NOSQL_DB_HOST for mongodb. You can get a list of available variables by loging into your gear and executing:</p>
+<pre><code>openshift_gear<span class="variable">$&gt;</span> env | grep <span class="constant">DB</span>
+</code></pre><p>Using web2py, the most useful variable will most likely be the URL when defining the DAL in the model. Here's a mongodb example for your model (db.py):</p>
+<pre><code><span class="keyword">from</span> os <span class="keyword">import</span> environ <span class="keyword">as</span> myenv
+DB_URL = myenv[<span class="string">'OPENSHIFT_NOSQL_DB_URL'</span>]+myenv[<span class="string">'OPENSHIFT_APP_NAME'</span>]
 
-<h3>
-<a id="designer-templates" class="anchor" href="#designer-templates" aria-hidden="true"><span class="octicon octicon-link"></span></a>Designer Templates</h3>
+db = DAL(DB_URL)
 
-<p>We've crafted some handsome templates for you to use. Go ahead and continue to layouts to browse through them. You can easily go back to edit your page before publishing. After publishing your page, you can revisit the page generator and switch to another theme. Your Page content will be preserved if it remained markdown format.</p>
+(Note: If using postgresql, put the following after the DB_URL line <span class="keyword">and</span> before the db = DAL line. Thanks srochy)
+DB_URL = DB_URL.replace(<span class="string">"postgresql://"</span>, <span class="string">"postgres://"</span>)
+</code></pre><p>If you want to view your data directly you can do this via the console tools logged directly into the Openshift gear, or install the cooresponding web management cartridge (ie. rockmongo, phpmyadmin).</p>
+<p>For more information on Openshift and how to accomplish various tasks, see: <a href="https://access.redhat.com/knowledge/docs/OpenShift/">https://access.redhat.com/knowledge/docs/OpenShift/</a></p>
+<h2 id="now-with-newrelic-config">Now with NewRelic Config</h2>
+<p>If you want to monitor the performance, user-experience and usage statistics, you can sign up for an account at newrelic.com.
+After signing up, simply put your license key in wsgi/web2py/newrelic.ini</p>
+<pre><code>license_key = <span class="xml"><span class="tag">&lt;<span class="title">your_license_key_from_your_newrelic_account</span>&gt;</span></span>
+</code></pre><p>And whatever you want the app labeled as in your newrelic account can be set via the name property.
+    app_name = web2py</p>
+<p>If you don't intend to use NewRelic or want to turn it off temporarily, simply comment out everything after #NewRelic Monitoring
+in the wsgi/application file. </p>
+<pre><code><span class="comment">#NewRelic Monitoring                                                      </span>
+<span class="title">import</span> newrelic.agent
+newrelic.agent.initialize(NEWRELIC_INI)
 
-<h3>
-<a id="rather-drive-stick" class="anchor" href="#rather-drive-stick" aria-hidden="true"><span class="octicon octicon-link"></span></a>Rather Drive Stick?</h3>
+application = newrelic.agent.wsgi_application()(application)
+</code></pre></body>
 
-<p>If you prefer to not use the automatic generator, push a branch named <code>gh-pages</code> to your repository to create a page manually. In addition to supporting regular HTML content, GitHub Pages support Jekyll, a simple, blog aware static site generator written by our own Tom Preston-Werner. Jekyll makes it easy to create site-wide headers and footers without having to copy them across every page. It also offers intelligent blog support and other advanced templating features.</p>
-
-<h3>
-<a id="authors-and-contributors" class="anchor" href="#authors-and-contributors" aria-hidden="true"><span class="octicon octicon-link"></span></a>Authors and Contributors</h3>
-
-<p>You can <a href="https://github.com/blog/821" class="user-mention">@mention</a> a GitHub username to generate a link to their profile. The resulting <code>&lt;a&gt;</code> element will link to the contributor's GitHub Profile. For example: In 2007, Chris Wanstrath (<a href="https://github.com/defunkt" class="user-mention">@defunkt</a>), PJ Hyett (<a href="https://github.com/pjhyett" class="user-mention">@pjhyett</a>), and Tom Preston-Werner (<a href="https://github.com/mojombo" class="user-mention">@mojombo</a>) founded GitHub.</p>
-
-<h3>
-<a id="support-or-contact" class="anchor" href="#support-or-contact" aria-hidden="true"><span class="octicon octicon-link"></span></a>Support or Contact</h3>
-
-<p>Having trouble with Pages? Check out the documentation at <a href="https://help.github.com/pages">https://help.github.com/pages</a> or contact <a href="mailto:support@github.com">support@github.com</a> and we’ll help you sort it out.</p>
-      </section>
-      <footer>
-        <p>This project is maintained by <a href="https://github.com/lminko">lminko</a></p>
-        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
-      </footer>
+            <footer>
+                <p>This project is maintained by <a href="https://github.com/lminko">lminko</a></p>
+                <p>
+                    <small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small>
+                </p>
+            </footer>
     </div>
     <script src="javascripts/scale.fix.js"></script>
-    
-  </body>
+
+</body>
+
 </html>
